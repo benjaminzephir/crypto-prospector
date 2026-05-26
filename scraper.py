@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 # ============================================================
 
 NOTION_KEY  = os.environ["NOTION_KEY"]
-DAILY_ID    = "36a6eb3913128021a75fe83e975a34eb"
+DAILY_ID    = "36b6eb39131280ac9c1adde75b3a9d0d"
 DATABASE_ID = "36a6eb391312803e8429ecdd22a80bef"
 
 NOTION_HEADERS = {
