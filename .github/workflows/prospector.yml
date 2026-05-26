@@ -23,5 +23,4 @@ jobs:
       - name: Run scraper
         env:
           NOTION_KEY: ${{ secrets.NOTION_KEY }}
-          COVALENT_KEY: ${{ secrets.COVALENT_KEY }}
         run: python scraper.py
