@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 NOTION_KEY  = os.environ["NOTION_KEY"]
 DAILY_ID    = "36a6eb3913128021a75fe83e975a34eb"
 DATABASE_ID = "36a6eb391312803e8429ecdd22a80bef"
-MAX         = 1000
 
 NOTION_HEADERS = {
     "Authorization": f"Bearer {NOTION_KEY}",
@@ -19,8 +18,7 @@ NOTION_HEADERS = {
     "Content-Type": "application/json",
 }
 
-WEB_HEADER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-
+WEB_HEADER   = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 TG_BLACKLIST = {"telegram","share","msg","iv","joinchat","addstickers","botfather","durov","tgstat","combot"}
 
 # ============================================================
@@ -89,15 +87,23 @@ def setup_databases():
         "DexScreener": {"url": {}},
     }
     for db_id in [DAILY_ID, DATABASE_ID]:
-        requests.patch(f"https://api.notion.com/v1/databases/{db_id}", headers=NOTION_HEADERS, json={"properties": props})
-    print("   Colonnes OK")
+        requests.patch(
+            f"https://api.notion.com/v1/databases/{db_id}",
+            headers=NOTION_HEADERS,
+            json={"properties": props}
+        )
+    print("   OK")
 
 def clear_daily():
     url, payload, n = f"https://api.notion.com/v1/databases/{DAILY_ID}/query", {"page_size": 100}, 0
     while True:
         data = requests.post(url, headers=NOTION_HEADERS, json=payload).json()
         for page in data.get("results", []):
-            requests.patch(f"https://api.notion.com/v1/pages/{page['id']}", headers=NOTION_HEADERS, json={"archived": True})
+            requests.patch(
+                f"https://api.notion.com/v1/pages/{page['id']}",
+                headers=NOTION_HEADERS,
+                json={"archived": True}
+            )
             n += 1
             time.sleep(0.1)
         if not data.get("has_more"):
@@ -119,11 +125,6 @@ def get_contacted():
     print(f"   {len(contacted)} deja contactes")
     return contacted
 
-def update_telegram_in_notion(page_id, telegram_url):
-    requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers=NOTION_HEADERS, json={
-        "properties": {"Telegram": {"url": telegram_url}}
-    })
-
 def add_to_db(db_id, p):
     props = {
         "Nom":         {"title":     [{"text": {"content": p["nom"]}}]},
@@ -131,16 +132,21 @@ def add_to_db(db_id, p):
         "Chain":       {"select":    {"name": p["chain"]}},
         "DexScreener": {"url":       p["dexscreener"]},
     }
-    if p.get("telegram"):
-        props["Telegram"] = {"url": p["telegram"]}
-    if p.get("website"):
-        props["Website"]  = {"url": p["website"]}
-    if p.get("x"):
-        props["X"]        = {"url": p["x"]}
+    if p.get("telegram"): props["Telegram"] = {"url": p["telegram"]}
+    if p.get("website"):  props["Website"]  = {"url": p["website"]}
+    if p.get("x"):        props["X"]        = {"url": p["x"]}
     r = requests.post("https://api.notion.com/v1/pages", headers=NOTION_HEADERS, json={
-        "parent": {"database_id": db_id}, "properties": props
+        "parent": {"database_id": db_id},
+        "properties": props
     })
     return r.status_code == 200, r.json().get("id")
+
+def update_telegram(page_id, tg):
+    requests.patch(
+        f"https://api.notion.com/v1/pages/{page_id}",
+        headers=NOTION_HEADERS,
+        json={"properties": {"Telegram": {"url": tg}}}
+    )
 
 # ============================================================
 # DEXSCREENER
@@ -149,14 +155,14 @@ def add_to_db(db_id, p):
 def fetch_pairs():
     all_pairs = []
 
-    # Profils + boosted
-    for ep in ["https://api.dexscreener.com/token-profiles/latest/v1",
-               "https://api.dexscreener.com/token-boosts/latest/v1",
-               "https://api.dexscreener.com/token-boosts/top/v1"]:
+    for ep in [
+        "https://api.dexscreener.com/token-profiles/latest/v1",
+        "https://api.dexscreener.com/token-boosts/latest/v1",
+        "https://api.dexscreener.com/token-boosts/top/v1",
+    ]:
         data = get_json(ep)
         if data:
-            items = data if isinstance(data, list) else data.get("data", [])
-            for item in items:
+            for item in (data if isinstance(data, list) else data.get("data",[])):
                 addr = item.get("tokenAddress","")
                 if addr:
                     r = get_json(f"https://api.dexscreener.com/latest/dex/tokens/{addr}")
@@ -164,7 +170,6 @@ def fetch_pairs():
                         all_pairs.extend(r.get("pairs",[]))
                     time.sleep(0.15)
 
-    # Recherche par termes
     terms = [
         "token","coin","protocol","dao","finance","swap","inu","pepe","ai","meme",
         "moon","cat","dog","doge","chad","based","gem","defi","nft","web3","pump",
@@ -182,7 +187,6 @@ def fetch_pairs():
             all_pairs.extend(r.get("pairs",[]))
         time.sleep(0.25)
 
-    # Deduplication par token
     seen, unique = set(), []
     for pair in all_pairs:
         key = f"{pair.get('chainId','')}_{pair.get('baseToken',{}).get('address','')}"
@@ -204,21 +208,12 @@ def passes(pair, contacted):
     h = age_hours(pair.get("pairCreatedAt"))
     if not h or h > 30*24:
         return False
-    if (pair.get("marketCap") or 0) < 10_000:
-        return False
-    if ((pair.get("volume") or {}).get("h24") or 0) < 1_000:
-        return False
-    if ((pair.get("liquidity") or {}).get("usd") or 0) < 5_000:
-        return False
-    holders = (pair.get("info") or {}).get("holders") or 0
-    if holders > 0 and holders < 50:
-        return False
     if pair.get("url","") in contacted:
         return False
     socials = (pair.get("info") or {}).get("socials") or []
-    tg      = get_social(socials, "telegram")
-    tw      = get_social(socials, "twitter")
-    ws      = get_website(pair)
+    tg = get_social(socials, "telegram")
+    tw = get_social(socials, "twitter")
+    ws = get_website(pair)
     if not tg and not tw and not ws:
         return False
     return True
@@ -228,26 +223,20 @@ def passes(pair, contacted):
 # ============================================================
 
 def search_telegram(website, twitter):
-    # Site web
     if website:
         base = website.rstrip("/")
-        for path in ["", "/community", "/about", "/social", "/links", "/contact", "/join", "/socials"]:
-            html = get_html(base + path)
-            tg   = find_telegram(html)
+        for path in ["","/community","/about","/social","/links","/contact","/join","/socials"]:
+            tg = find_telegram(get_html(base + path))
             if tg:
                 return tg
             time.sleep(0.15)
-
-    # Twitter via Nitter
     if twitter:
         handle = twitter.rstrip("/").split("/")[-1].lstrip("@")
-        for base in ["https://nitter.net", "https://nitter.privacydev.net"]:
-            html = get_html(f"{base}/{handle}", timeout=5)
-            tg   = find_telegram(html)
+        for base in ["https://nitter.net","https://nitter.privacydev.net"]:
+            tg = find_telegram(get_html(f"{base}/{handle}", timeout=5))
             if tg:
                 return tg
             time.sleep(0.2)
-
     return None
 
 # ============================================================
@@ -271,7 +260,6 @@ def main():
     print("\n4. Recuperation DexScreener...")
     pairs = fetch_pairs()
 
-    # Filtrage
     print(f"\n5. Filtrage ({len(pairs)} tokens)...")
     candidates, seen_names = [], set()
     for pair in pairs:
@@ -295,52 +283,48 @@ def main():
     print(f"   {len(candidates)} projets retenus")
     print(f"   {len([c for c in candidates if c['telegram']])} ont deja Telegram")
 
-    # Ajout dans Database Projects
     print(f"\n6. Ajout dans Database Projects...")
     db_pages = {}
     for c in candidates:
-        ok, page_id = add_to_db(DATABASE_ID, c)
-        if ok and page_id:
-            db_pages[c["dexscreener"]] = page_id
+        ok, pid = add_to_db(DATABASE_ID, c)
+        if ok and pid:
+            db_pages[c["dexscreener"]] = pid
         time.sleep(0.3)
-    print(f"   {len(db_pages)} projets ajoutes")
+    print(f"   {len(db_pages)} ajoutes")
 
-    # Ajout dans Daily Projects
     print(f"\n7. Ajout dans Daily Projects...")
     daily_pages = {}
-    for c in candidates[:MAX]:
-        ok, page_id = add_to_db(DAILY_ID, c)
-        if ok and page_id:
-            daily_pages[c["dexscreener"]] = {"page_id": page_id, "project": c}
+    for c in candidates:
+        ok, pid = add_to_db(DAILY_ID, c)
+        if ok and pid:
+            daily_pages[c["dexscreener"]] = pid
         time.sleep(0.3)
-    print(f"   {len(daily_pages)} projets ajoutes")
+    print(f"   {len(daily_pages)} ajoutes")
 
-    # Recherche Telegram pour ceux qui n'en ont pas
-    no_tg = [c for c in candidates[:MAX] if not c["telegram"]]
-    print(f"\n8. Recherche Telegram ({len(no_tg)} projets sans Telegram)...")
+    print(f"\n8. Recherche Telegram pour projets sans Telegram...")
+    no_tg = [c for c in candidates if not c["telegram"]]
+    print(f"   {len(no_tg)} projets a traiter")
     found = 0
     for c in no_tg:
         tg = search_telegram(c["website"], c["x"])
         if tg:
             c["telegram"] = tg
             found += 1
-            # Met a jour dans les deux bases
-            dex_url = c["dexscreener"]
-            if dex_url in db_pages:
-                update_telegram_in_notion(db_pages[dex_url], tg)
-            if dex_url in daily_pages:
-                update_telegram_in_notion(daily_pages[dex_url]["page_id"], tg)
+            dex = c["dexscreener"]
+            if dex in db_pages:
+                update_telegram(db_pages[dex], tg)
+            if dex in daily_pages:
+                update_telegram(daily_pages[dex], tg)
             print(f"   Trouve : {tg}")
         time.sleep(0.2)
     print(f"   {found} Telegrams trouves")
 
     print(f"\n{'='*50}")
     print(f"  TERMINE")
-    print(f"  {len(candidates)} projets dans Database Projects")
-    print(f"  {len(daily_pages)} projets dans Daily Projects")
-    print(f"  {len([c for c in candidates if c.get('telegram')])} avec Telegram")
+    print(f"  Database Projects : {len(db_pages)} projets")
+    print(f"  Daily Projects    : {len(daily_pages)} projets")
+    print(f"  Avec Telegram     : {len([c for c in candidates if c.get('telegram')])} projets")
     print(f"{'='*50}\n")
 
 if __name__ == "__main__":
     main()
-ENDOFFILE
