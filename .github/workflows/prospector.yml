@@ -1,0 +1,27 @@
+name: Crypto Prospector
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  prospect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run scraper
+        env:
+          NOTION_KEY: ${{ secrets.NOTION_KEY }}
+          COVALENT_KEY: ${{ secrets.COVALENT_KEY }}
+        run: python scraper.py
