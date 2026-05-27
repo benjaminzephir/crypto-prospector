@@ -254,12 +254,13 @@ def main():
     print("\n2. Vidage Daily Projects...")
     clear_daily()
 
-    print("\n3. Projets deja contactes...")
+    print("\n3. Projets deja dans Database Projects...")
     contacted = get_contacted()
 
     print("\n4. Recuperation DexScreener...")
     pairs = fetch_pairs()
 
+    # Filtrage
     print(f"\n5. Filtrage ({len(pairs)} tokens)...")
     candidates, seen_names = [], set()
     for pair in pairs:
@@ -283,47 +284,46 @@ def main():
     print(f"   {len(candidates)} projets retenus")
     print(f"   {len([c for c in candidates if c['telegram']])} ont deja Telegram")
 
-    print(f"\n6. Ajout dans Database Projects...")
-    db_pages = {}
-    for c in candidates:
-        ok, pid = add_to_db(DATABASE_ID, c)
-        if ok and pid:
-            db_pages[c["dexscreener"]] = pid
-        time.sleep(0.3)
-    print(f"   {len(db_pages)} ajoutes")
-
-    print(f"\n7. Ajout dans Daily Projects...")
-    daily_pages = {}
-    for c in candidates:
-        ok, pid = add_to_db(DAILY_ID, c)
-        if ok and pid:
-            daily_pages[c["dexscreener"]] = pid
-        time.sleep(0.3)
-    print(f"   {len(daily_pages)} ajoutes")
-
-    print(f"\n8. Recherche Telegram pour projets sans Telegram...")
+    # Recherche Telegram pour ceux sans
     no_tg = [c for c in candidates if not c["telegram"]]
-    print(f"   {len(no_tg)} projets a traiter")
+    print(f"\n6. Recherche Telegram ({len(no_tg)} projets sans)...")
     found = 0
     for c in no_tg:
         tg = search_telegram(c["website"], c["x"])
         if tg:
             c["telegram"] = tg
             found += 1
-            dex = c["dexscreener"]
-            if dex in db_pages:
-                update_telegram(db_pages[dex], tg)
-            if dex in daily_pages:
-                update_telegram(daily_pages[dex], tg)
-            print(f"   Trouve : {tg}")
         time.sleep(0.2)
     print(f"   {found} Telegrams trouves")
 
+    # Projets avec Telegram OU X
+    final = [c for c in candidates if c.get("telegram") or c.get("x")]
+    print(f"\n{len(final)} projets avec Telegram OU X")
+
+    # Ajout dans Database Projects (pas de suppression)
+    print(f"\n7. Ajout dans Database Projects...")
+    db_pages = {}
+    for c in final:
+        ok, pid = add_to_db(DATABASE_ID, c)
+        if ok and pid:
+            db_pages[c["dexscreener"]] = pid
+        time.sleep(0.3)
+    print(f"   {len(db_pages)} ajoutes")
+
+    # Ajout dans Daily Projects (vidé au début)
+    print(f"\n8. Ajout dans Daily Projects...")
+    count = 0
+    for c in final:
+        ok, pid = add_to_db(DAILY_ID, c)
+        if ok:
+            count += 1
+            print(f"   [{count}] {c['nom']} ({c['ticker']}) — {c['chain']}")
+        time.sleep(0.3)
+
     print(f"\n{'='*50}")
     print(f"  TERMINE")
-    print(f"  Database Projects : {len(db_pages)} projets")
-    print(f"  Daily Projects    : {len(daily_pages)} projets")
-    print(f"  Avec Telegram     : {len([c for c in candidates if c.get('telegram')])} projets")
+    print(f"  Daily Projects    : {count} projets")
+    print(f"  Database Projects : {len(db_pages)} nouveaux")
     print(f"{'='*50}\n")
 
 if __name__ == "__main__":
