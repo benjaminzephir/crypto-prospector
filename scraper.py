@@ -52,11 +52,6 @@ def find_telegram(text):
             return f"https://t.me/{slug}"
     return None
 
-def age_hours(ts):
-    if not ts:
-        return None
-    return (datetime.now(tz=timezone.utc) - datetime.fromtimestamp(ts/1000, tz=timezone.utc)).total_seconds() / 3600
-
 def get_social(socials, kind):
     for s in (socials or []):
         u = s.get("url","")
@@ -205,9 +200,6 @@ def passes(pair, contacted):
     labels = [l.lower() for l in pair.get("labels",[])]
     if "scam" in labels or "honeypot" in labels:
         return False
-    h = age_hours(pair.get("pairCreatedAt"))
-    if not h or h > 30*24:
-        return False
     if pair.get("url","") in contacted:
         return False
     socials = (pair.get("info") or {}).get("socials") or []
@@ -232,8 +224,8 @@ def search_telegram(website, twitter):
             time.sleep(0.15)
     if twitter:
         handle = twitter.rstrip("/").split("/")[-1].lstrip("@")
-        for base in ["https://nitter.net","https://nitter.privacydev.net"]:
-            tg = find_telegram(get_html(f"{base}/{handle}", timeout=5))
+        for base_url in ["https://nitter.net","https://nitter.privacydev.net"]:
+            tg = find_telegram(get_html(f"{base_url}/{handle}", timeout=5))
             if tg:
                 return tg
             time.sleep(0.2)
@@ -296,24 +288,21 @@ def main():
         time.sleep(0.2)
     print(f"   {found} Telegrams trouves")
 
-    # Projets avec Telegram OU X
-    final = [c for c in candidates if c.get("telegram") or c.get("x")]
-    print(f"\n{len(final)} projets avec Telegram OU X")
-
-    # Ajout dans Database Projects (pas de suppression)
+    # Ajout dans Database Projects (tous les projets)
     print(f"\n7. Ajout dans Database Projects...")
     db_pages = {}
-    for c in final:
+    for c in candidates:
         ok, pid = add_to_db(DATABASE_ID, c)
         if ok and pid:
             db_pages[c["dexscreener"]] = pid
         time.sleep(0.3)
     print(f"   {len(db_pages)} ajoutes")
 
-    # Ajout dans Daily Projects (vidé au début)
-    print(f"\n8. Ajout dans Daily Projects...")
+    # Ajout dans Daily Projects (uniquement ceux avec Telegram)
+    with_tg = [c for c in candidates if c.get("telegram")]
+    print(f"\n8. Ajout dans Daily Projects ({len(with_tg)} avec Telegram)...")
     count = 0
-    for c in final:
+    for c in with_tg:
         ok, pid = add_to_db(DAILY_ID, c)
         if ok:
             count += 1
@@ -322,8 +311,8 @@ def main():
 
     print(f"\n{'='*50}")
     print(f"  TERMINE")
-    print(f"  Daily Projects    : {count} projets")
-    print(f"  Database Projects : {len(db_pages)} nouveaux")
+    print(f"  Database Projects : {len(db_pages)} nouveaux projets")
+    print(f"  Daily Projects    : {count} projets avec Telegram")
     print(f"{'='*50}\n")
 
 if __name__ == "__main__":
