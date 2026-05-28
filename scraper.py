@@ -298,11 +298,11 @@ def main():
         time.sleep(0.3)
     print(f"   {len(db_pages)} ajoutes")
 
-    # Ajout dans Daily Projects (uniquement ceux avec Telegram)
-    with_tg = [c for c in candidates if c.get("telegram")]
-    print(f"\n8. Ajout dans Daily Projects ({len(with_tg)} avec Telegram)...")
+    # Daily Projects : uniquement ceux avec Telegram OU X
+    with_tg_or_x = [c for c in candidates if c.get("telegram") or c.get("x")]
+    print(f"\n8. Ajout dans Daily Projects ({len(with_tg_or_x)} avec Telegram OU X)...")
     count = 0
-    for c in with_tg:
+    for c in with_tg_or_x:
         ok, pid = add_to_db(DAILY_ID, c)
         if ok:
             count += 1
@@ -312,7 +312,7 @@ def main():
     print(f"\n{'='*50}")
     print(f"  TERMINE")
     print(f"  Database Projects : {len(db_pages)} nouveaux projets")
-    print(f"  Daily Projects    : {count} projets avec Telegram")
+    print(f"  Daily Projects    : {count} projets (Telegram OU X)")
     print(f"{'='*50}\n")
 
 if __name__ == "__main__":
